@@ -1,23 +1,36 @@
+﻿using Microsoft.EntityFrameworkCore;
 using ReadAndVerify.Components;
+using ReadAndVerify.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// Carga de conexión antes de construir app
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+
+if (string.IsNullOrEmpty(connectionString))
+{
+    throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+}
+
+// ✅ Registra la base de datos ANTES de Build
+builder.Services.AddDbContext<LocalDB>(options =>
+    options.UseSqlServer(connectionString));
+
+// Otros servicios de Blazor
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+// ✅ SOLO AHORA se construye la app
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// Middleware y configuración del entorno
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
 
 app.UseHttpsRedirection();
-
 app.UseStaticFiles();
 app.UseAntiforgery();
 

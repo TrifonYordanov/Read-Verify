@@ -1,7 +1,12 @@
-﻿namespace ReadAndVerify.Models
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace ReadAndVerify.Models
 {
     public class ChipProfile
     {
+        // Identificador único del chip
+        [Key]
+        public int Id { get; set; }
         // Descripción del chip
         public string Name { get; set; } = string.Empty;
         public string TidMask { get; set; } = string.Empty;
