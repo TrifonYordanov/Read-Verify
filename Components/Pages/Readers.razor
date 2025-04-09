@@ -1,0 +1,147 @@
+@page "/readers"
+@using ReadAndVerify.Models
+@using ReadAndVerify.Repos
+@inject IReaderRepository ReaderRepo
+@inject NavigationManager Nav
+
+<div class="max-w-4xl mx-auto p-6">
+    <!-- Encabezado -->
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold text-gray-800 flex items-center gap-3">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 70px; height: 70px">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+            Lectores RFID
+        </h1>
+
+        <button @onclick="ToggleAddForm"
+                class="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded shadow transition" style="border: 2px outset #6205a6; float: none; background-color: rgb(111, 0, 158)">
+            <span class="text-xl">+</span> Añadir
+        </button>
+    </div>
+
+    <!-- Formulario de nuevo lector -->
+    @if (showAddForm)
+    {
+        <div class="bg-gray-50 border border-gray-300 p-6 rounded-lg shadow-md mb-6 animate-fade-in">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4">Nuevo lector</h2>
+
+            <div class="grid gap-4">
+                <input @bind="newReader.Name" placeholder="Nombre del lector"
+                       class="border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+
+                <input @bind="newReader.IpAddress" placeholder="Dirección IP o Host"
+                       class="border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+
+                <select @bind="newReader.LocationId"
+                        class="border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">Selecciona ubicación</option>
+                    @foreach (var loc in locations)
+                    {
+                        <option value="@loc.Id">@loc.Name</option>
+                    }
+                </select>
+
+                <!-- Test de conexión -->
+                <div class="flex items-center gap-4">
+                    <button @onclick="TestConnection"
+                            class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-1 rounded font-medium">
+                        Probar conexión
+                    </button>
+
+                    <span class="inline-flex items-center gap-2 text-sm">
+                        @if (testStatus == null)
+                        {
+                            <span class="w-3 h-3 rounded-full bg-gray-400"></span>
+                            <span class="text-gray-500">No probado</span>
+                        }
+                        else if (testStatus == true)
+                        {
+                            <span class="w-3 h-3 rounded-full bg-green-500 animate-pulse"></span>
+                            <span class="text-green-700">OK</span>
+                        }
+                        else
+                        {
+                            <span class="w-3 h-3 rounded-full bg-red-500"></span>
+                            <span class="text-red-700">Error</span>
+                        }
+                    </span>
+                </div>
+
+                <!-- Botón guardar -->
+                <button @onclick="SaveReader"
+                        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded font-medium w-full mt-2"
+                        disabled="@(testStatus != true)">
+                    Guardar lector
+                </button>
+            </div>
+        </div>
+    }
+
+    <!-- Lista de lectores -->
+    @if (readers is null)
+    {
+        <p class="text-gray-500">Cargando lectores...</p>
+    }
+    else if (!readers.Any())
+    {
+        <p class="text-gray-400 italic">No hay lectores registrados.</p>
+    }
+    else
+    {
+        <div class="grid md:grid-cols-2 gap-4">
+            @foreach (var reader in readers)
+            {
+                <div class="bg-white p-4 border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition">
+                    <h3 class="text-lg font-semibold text-gray-800">@reader.Name</h3>
+                    <p class="text-sm text-gray-600">@reader.IpAddress</p>
+                    <p class="text-sm text-gray-500">Ubicación: @reader.Location?.Name</p>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<Reader> readers = new();
+    private List<Location> locations = new();
+    private Reader newReader = new();
+    private bool showAddForm = false;
+    private bool? testStatus = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        readers = await ReaderRepo.GetAllAsync();
+        locations = await ReaderRepo.GetAllLocationsAsync();
+    }
+
+    private void ToggleAddForm()
+    {
+        showAddForm = !showAddForm;
+        newReader = new();
+        testStatus = null;
+    }
+
+    private async Task TestConnection()
+    {
+        if (string.IsNullOrWhiteSpace(newReader.IpAddress))
+        {
+            testStatus = false;
+            return;
+        }
+
+        // Simulación de prueba de conexión
+        await Task.Delay(400);
+        testStatus = newReader.IpAddress.StartsWith("192.");
+    }
+
+    private async Task SaveReader()
+    {
+        if (testStatus == true)
+        {
+            await ReaderRepo.AddAsync(newReader);
+            readers = await ReaderRepo.GetAllAsync();
+            ToggleAddForm();
+        }
+    }
+}

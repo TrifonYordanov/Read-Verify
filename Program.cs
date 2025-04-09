@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using ReadAndVerify.Components;
 using ReadAndVerify.Data;
+using ReadAndVerify.Repos;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,12 +14,14 @@ if (string.IsNullOrEmpty(connectionString))
 }
 
 // ✅ Registra la base de datos ANTES de Build
-builder.Services.AddDbContext<LocalDB>(options =>
-    options.UseSqlServer(connectionString));
+builder.Services.AddDbContext<LocalDB>(options => options.UseSqlServer(connectionString));
+
+// Registra el repositorio de Readers
+builder.Services.AddScoped<IReaderRepository, ReaderRepository>();
+
 
 // Otros servicios de Blazor
-builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents();
+builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 
 // ✅ SOLO AHORA se construye la app
 var app = builder.Build();
