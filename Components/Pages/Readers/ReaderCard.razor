@@ -1,0 +1,27 @@
+﻿@using ReadAndVerify.Models
+
+
+<div class="card shadow-sm border-0 mb-4" style="width: 18rem;">
+    <div class="card-body">
+        <h5 class="card-title">@Reader.Name</h5>
+        <h6 class="card-subtitle mb-2 text-muted">@Reader.IpAddress</h6>
+        <p class="card-text">
+            Estado:
+            <span class="badge rounded-pill @(Reader.IsOnline ? "bg-success" : "bg-danger")">
+                @(Reader.IsOnline ? "Online" : "Offline")
+            </span>
+        </p>
+
+        @if (OnClick.HasDelegate)
+        {
+            <button class="btn btn-primary btn-sm" @onclick="() => OnClick.InvokeAsync(Reader)">
+                Ver detalles
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public Reader Reader { get; set; } = default!;
+    [Parameter] public EventCallback<Reader> OnClick { get; set; }
+}

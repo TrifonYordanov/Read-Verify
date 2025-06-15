@@ -1,0 +1,18 @@
+﻿@page "/testclick"
+@using System.Diagnostics
+
+<h3>Test Click</h3>
+
+<button class="btn btn-primary" @onclick="OnClick">Púlsame</button>
+
+<p>Total clicks: @clicks</p>
+
+@code {
+    int clicks = 0;
+
+    void OnClick()
+    {
+        clicks++;
+        Debug.WriteLine($"Click número: {clicks}");
+    }
+}

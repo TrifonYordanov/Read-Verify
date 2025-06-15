@@ -1,0 +1,81 @@
+﻿@using ReadAndVerify.Services
+@using ReadAndVerify.DTOs
+@inject ILocationService LocationService
+
+@if (IsModalVisible)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@((IsEdit ? "Edit Location" : "New Location"))</h5>
+                    <button type="button" class="btn-close" @onclick="Close"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="mt-3 d-flex align-items-center gap-2">
+                        <label class="form-label mb-0" style="width: 100px;">Name:</label>
+                        <input class="form-control" style="flex: 1;" @bind="Location.Name" />
+                    </div>
+                </div>
+
+                <div class="modal-footer d-flex justify-content-between">
+                    <button class="btn btn-secondary" @onclick="Close">Cancel</button>
+                    <button class="btn btn-primary" @onclick="SaveLocationAsync">
+                        @(IsEdit ? "Update Location" : "Add Location")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool IsModalVisible = false;
+    private bool IsEdit = false;
+    private LocationDTO Location = new();
+
+    [Parameter] public EventCallback<string> OnLocationAdded { get; set; }
+
+    public async Task ShowAsync(LocationDTO? locationToEdit = null)
+    {
+        if (locationToEdit is not null)
+        {
+            Location = new LocationDTO
+            {
+                Id = locationToEdit.Id,
+                Name = locationToEdit.Name
+            };
+            IsEdit = true;
+        }
+        else
+        {
+            Location = new LocationDTO();
+            IsEdit = false;
+        }
+
+        IsModalVisible = true;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void Close()
+    {
+        IsModalVisible = false;
+    }
+
+    private async Task SaveLocationAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(Location.Name))
+        {
+            if (IsEdit)
+                await LocationService.UpdateLocationAsync(Location.Id, Location);
+            else
+                await LocationService.AddLocationAsyn(Location);
+
+            IsModalVisible = false;
+
+            if (OnLocationAdded.HasDelegate)
+                await OnLocationAdded.InvokeAsync(Location.Name);
+        }
+    }
+}

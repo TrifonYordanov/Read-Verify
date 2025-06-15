@@ -1,0 +1,188 @@
+﻿@page "/readers"
+@rendermode InteractiveServer
+@using ReadAndVerify.Components.Pages.Readers
+@using ReadAndVerify.DTOs
+@using ReadAndVerify.Services
+@using ReadAndVerify.Components.Shared
+@inject IReaderService ReaderService
+@inject ReaderSdkService ReaderSdk
+
+<PageTitle>Readers</PageTitle>
+
+<h1 class="mb-4">📡 Readers</h1>
+
+@if (showModal)
+{
+    <AddReaderForm ReaderToEdit="readerToEdit" OnClose="HideAddReaderForm" />
+}
+
+@if (isLoading)
+{
+    <div class="text-muted">Cargando lectores...</div>
+}
+else
+{
+    <div class="d-flex flex-wrap gap-3">
+        <!-- CARD: Agregar Reader -->
+        <div class="card shadow-sm border-0 rounded-4 add-card"
+             style="width: 320px; cursor: pointer;"
+             @onclick="() => ShowAddReaderForm(null)">
+            <div class="card-body d-flex flex-column justify-content-center align-items-center" style="height: 300px;">
+                <i class="bi bi-plus-circle" style="font-size: 2.5rem;"></i>
+                <p class="mt-2 mb-0">Agregar Reader</p>
+            </div>
+        </div>
+
+        @if (readerList.Count == 0)
+        {
+            <p class="text-muted mt-3">No hay lectores registrados.</p>
+        }
+        else
+        {
+            @foreach (var reader in readerList)
+            {
+                <div class="card h-100 shadow-sm border-0 rounded-4"
+                     style="width: 320px;">
+                    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center rounded-top-4 px-3 py-2">
+                        <strong class="text-truncate">@reader.Name</strong>
+                        <span title="Toggle connection"
+                              @onclick="() => ToggleConnection(reader)"
+                              style="width: 18px; height: 18px; border-radius: 50%; display: inline-block; cursor: pointer;"
+                              class="@GetLedClass(reader)">
+                        </span>
+                    </div>
+                    <div class="card-body text-center px-3 py-3">
+                        <img src="images/reader.jpg" alt="Reader" class="img-fluid mb-3 rounded" style="max-height: 100px;" />
+                        <p class="mb-1"><strong>IP:</strong> @reader.IpAddress</p>
+                        <p class="mb-0"><strong>Location:</strong> @reader.LocationName</p>
+                    </div>
+                    <div class="card-footer bg-light d-flex justify-content-around border-top rounded-bottom-4 py-2">
+                        <button class="btn btn-outline-warning btn-sm" @onclick="() => ShowAddReaderForm(reader)">
+                            <i class="bi bi-pencil-square"></i> Editar
+                        </button>
+                        <button class="btn btn-outline-danger btn-sm" @onclick="() => ConfirmDelete(reader.Id)">
+                            <i class="bi bi-trash"></i> Eliminar
+                        </button>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+}
+
+<ConfirmDialog @ref="confirmDialogRef"
+               Title="Confirm delete"
+               Message="Are you sure you want to delete this reader?"
+               OnConfirmed="DeleteReaderConfirmed" />
+
+@code {
+    private bool showModal = false;
+    private List<ReaderDTO> readerList = new();
+    private ReaderDTO? readerToEdit;
+    private int readerIdToDelete;
+    private ConfirmDialog? confirmDialogRef;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadReadersAsync();
+        _ = Task.Run(UpdateReadersStatusAsync);
+    }
+
+    private async Task LoadReadersAsync()
+    {
+        isLoading = true;
+        readerList = await ReaderService.GetAllAsync();
+        isLoading = false;
+    }
+
+    private async Task UpdateReadersStatusAsync()
+    {
+        foreach (var reader in readerList)
+        {
+            try
+            {
+                reader.IsOnline = await ReaderSdk.ConnectAsync(reader.IpAddress);
+                ReaderSdk.Disconnect();
+            }
+            catch
+            {
+                reader.IsOnline = false;
+            }
+
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void ShowAddReaderForm(ReaderDTO? reader)
+    {
+        readerToEdit = reader;
+        showModal = true;
+    }
+
+    private async Task HideAddReaderForm()
+    {
+        readerToEdit = null;
+        showModal = false;
+        await LoadReadersAsync();
+        _ = Task.Run(UpdateReadersStatusAsync);
+    }
+
+    private void ConfirmDelete(int readerId)
+    {
+        readerIdToDelete = readerId;
+        confirmDialogRef?.Show();
+    }
+
+    private async Task DeleteReaderConfirmed()
+    {
+        await ReaderService.DeleteAsync(readerIdToDelete);
+        await LoadReadersAsync();
+        _ = Task.Run(UpdateReadersStatusAsync);
+    }
+
+    private async Task ToggleConnection(ReaderDTO reader)
+    {
+        try
+        {
+            if (reader.IsOnline)
+            {
+                ReaderSdk.Disconnect();
+                reader.IsOnline = false;
+            }
+            else
+            {
+                reader.IsOnline = await ReaderSdk.ConnectAsync(reader.IpAddress);
+            }
+        }
+        catch
+        {
+            reader.IsOnline = false;
+        }
+
+        StateHasChanged();
+    }
+
+    private string GetLedClass(ReaderDTO reader)
+    {
+        return reader.IsOnline ? "bg-success" : "bg-danger";
+    }
+}
+
+<style>
+    .add-card {
+        transition: all 0.2s ease-in-out;
+    }
+
+        .add-card:hover {
+            background-color: #f1f1f1;
+            box-shadow: 0 0 12px rgba(0, 0, 0, 0.2);
+            transform: translateY(-2px);
+            cursor: pointer;
+        }
+
+            .add-card:hover i,
+            .add-card:hover p {
+                color: #0d6efd;
+            }
+</style>

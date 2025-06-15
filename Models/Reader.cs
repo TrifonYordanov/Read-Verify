@@ -9,8 +9,18 @@ namespace ReadAndVerify.Models
         public int Id { get; set; }
 
         public string Name { get; set; } = string.Empty;
+
         public string IpAddress { get; set; } = string.Empty;
+
         public bool IsOnline { get; set; } = false;
+
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        public DateTime? LastSeenAt { get; set; } // Última conexión o "ping"
+
+        public string FirmwareVersion { get; set; } = string.Empty;
+
+        public string Model { get; set; } = string.Empty;
 
         // Relación con Location
         public int LocationId { get; set; }

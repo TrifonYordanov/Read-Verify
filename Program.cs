@@ -1,32 +1,36 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using ReadAndVerify.Components;
 using ReadAndVerify.Data;
-using ReadAndVerify.Repos;
+using ReadAndVerify.Mappings;
+using ReadAndVerify.Repository;
+using ReadAndVerify.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Carga de conexión antes de construir app
+// Conexion a Base de Datos
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-
 if (string.IsNullOrEmpty(connectionString))
-{
     throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
-}
 
-// ✅ Registra la base de datos ANTES de Build
 builder.Services.AddDbContext<LocalDB>(options => options.UseSqlServer(connectionString));
 
-// Registra el repositorio de Readers
+// Registra servicios de AutoMapper y repositorios
 builder.Services.AddScoped<IReaderRepository, ReaderRepository>();
+builder.Services.AddScoped<ILocationRepository, LocationRepository>();
+builder.Services.AddAutoMapper(typeof(MappingProfile));
+builder.Services.AddScoped<ILocationService, LocationService>();
+builder.Services.AddSingleton<IReaderConnectionService, ReaderConnectionService>();
+builder.Services.AddScoped<IReaderService, ReaderService>();
+builder.Services.AddSingleton<ReaderSdkService>();
 
 
-// Otros servicios de Blazor
+
+//Agrega servicios de Razor Components
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 
-// ✅ SOLO AHORA se construye la app
 var app = builder.Build();
 
-// Middleware y configuración del entorno
+// Configura middlewares y entorno
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
@@ -37,7 +41,7 @@ app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseAntiforgery();
 
-app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode();
+// Mapea el componente principal
+app.MapRazorComponents<AppShell>().AddInteractiveServerRenderMode();
 
 app.Run();

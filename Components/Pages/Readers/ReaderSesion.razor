@@ -1,0 +1,192 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@using ReadAndVerify.Services
+@using ReadAndVerify.DTOs
+@inject IReaderService ReaderService
+@inject ReaderSdkService ReaderSdk
+
+<h3 class="mb-4">Leer Etiquetas</h3>
+
+<!-- Selector de Readers -->
+<div class="mb-4">
+    <label class="form-label">Select Reader:</label>
+    <select class="form-select" @onchange="OnReaderSelected">
+        <option value="">-- Select a reader --</option>
+        @foreach (var reader in Readers)
+        {
+            <option value="@reader.Id">@reader.Name (@reader.IpAddress)</option>
+        }
+    </select>
+</div>
+
+@if (SelectedReaderConfig is not null)
+{
+    <div class="border rounded shadow-sm p-4 mb-4 bg-light">
+        <h4 class="mb-4 text-primary fw-bold border-bottom pb-2">Reader Configuration</h4>
+
+        <!-- Antennas -->
+        <div class="mb-3">
+            <label class="form-label fw-bold">Antennas Enabled:</label>
+            <div class="d-flex gap-4 flex-wrap">
+                @foreach (var antenna in SelectedReaderConfig.Antennas)
+                {
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="ant@antenna.PortNumber" @bind="antenna.IsEnabled" />
+                        <label class="form-check-label" for="ant@antenna.PortNumber">Antenna @antenna.PortNumber</label>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Power & Sensitivity -->
+        <div class="d-flex gap-4 align-items-end mb-3">
+            <div>
+                <label class="form-label">Power (dBm)</label>
+                <input type="number" class="form-control" style="width: 120px;" @bind="SelectedReaderConfig.Antennas[0].PowerDbm" />
+            </div>
+            <div>
+                <label class="form-label">Sensitivity (dBm)</label>
+                <input type="number" class="form-control" style="width: 120px;" @bind="SelectedReaderConfig.Antennas[0].SensitivityDbm" />
+            </div>
+        </div>
+
+        <!-- Botones -->
+        <div class="d-flex gap-2 mt-3">
+            <button class="btn btn-success" @onclick="StartReading" disabled="@IsReading">▶ Start</button>
+            <button class="btn btn-danger" @onclick="StopReading" disabled="@(IsReading == false)">■ Stop</button>
+            <button class="btn btn-secondary" @onclick="ClearTags">Clear</button>
+        </div>
+    </div>
+}
+
+@if (Tags.Count > 0)
+{
+    <h5 class="mt-5">📋 Tags Read</h5>
+    <table class="table table-bordered table-hover shadow-sm">
+        <thead class="table-dark">
+            <tr>
+                <th style="width: 22%">EPC</th>
+                <th style="width: 22%">TID</th>
+                <th style="width: 8%">RSSI</th>
+                <th style="width: 8%">Min</th>
+                <th style="width: 8%">Max</th>
+                <th style="width: 8%">Ant</th>
+                <th style="width: 14%">Seen</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var tag in Tags)
+            {
+                var rowStyle = tag.IsActive
+                ? "background-color: #e7f1ff;" // azul claro
+                : "background-color: white;";
+
+                <tr style="@rowStyle">
+                    <td class="text-truncate" style="max-width: 180px;" title="@tag.EPC">@tag.EPC</td>
+                    <td class="text-truncate" style="max-width: 180px;" title="@tag.TID">@tag.TID</td>
+                    <td>@tag.RSSI</td>
+                    <td>@tag.RSSIMin</td>
+                    <td>@tag.RSSIMax</td>
+                    <td>@tag.AntennaPort</td>
+                    <td>@tag.FirstSeen</td>
+                </tr>
+            }
+        </tbody>
+
+    </table>
+}
+
+@code {
+    private List<ReaderDTO> Readers = new();
+    private int? SelectedReaderId;
+    private ReaderConfigurationDTO? SelectedReaderConfig;
+    private List<TagReadDTO> Tags = new();
+    private bool IsReading = false;
+    private System.Timers.Timer? RefreshTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Readers = await ReaderService.GetAllAsync();
+    }
+
+    private async Task OnReaderSelected(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int id))
+        {
+            SelectedReaderId = id;
+            var reader = await ReaderService.GetByIdAsync(id);
+
+            SelectedReaderConfig = reader?.Configuration is not null
+                ? new ReaderConfigurationDTO
+                {
+                    Antennas = reader.Configuration.Antennas.Select(a => new AntennaConfigurationDTO
+                    {
+                        PortNumber = a.PortNumber,
+                        IsEnabled = a.IsEnabled,
+                        PowerDbm = (int)a.PowerDbm,
+                        SensitivityDbm = (int)a.SensitivityDbm
+                    }).ToList(),
+                    IncludeTid = true
+                }
+                : new ReaderConfigurationDTO { Antennas = new() };
+
+            for (int i = 1; i <= 4; i++)
+            {
+                if (!SelectedReaderConfig.Antennas.Any(a => a.PortNumber == i))
+                {
+                    SelectedReaderConfig.Antennas.Add(new AntennaConfigurationDTO
+                    {
+                        PortNumber = i,
+                        IsEnabled = i == 1,
+                        PowerDbm = 25,
+                        SensitivityDbm = -70
+                    });
+                }
+            }
+
+            SelectedReaderConfig.Antennas = SelectedReaderConfig.Antennas
+                .OrderBy(a => a.PortNumber).ToList();
+        }
+    }
+
+    private async Task StartReading()
+    {
+        if (SelectedReaderId is null || SelectedReaderConfig is null)
+            return;
+
+        var reader = Readers.FirstOrDefault(r => r.Id == SelectedReaderId);
+        if (reader is null)
+            return;
+
+        bool connected = ReaderSdk.IsConnected || await ReaderSdk.ConnectAsync(reader.IpAddress);
+        if (!connected) return;
+
+        await ReaderSdk.ConfigureAsync(SelectedReaderConfig);
+        await ReaderSdk.StartReadingAsync();
+
+        IsReading = true;
+
+        RefreshTimer = new System.Timers.Timer(10);
+        RefreshTimer.Elapsed += (_, _) =>
+        {
+            Tags = ReaderSdk.GetReadTags().ToList();
+            InvokeAsync(StateHasChanged);
+        };
+
+        RefreshTimer.Start();
+    }
+
+    private async Task StopReading()
+    {
+        if (!IsReading) return;
+
+        RefreshTimer?.Stop();
+        await ReaderSdk.StopReadingAsync();
+        IsReading = false;
+    }
+
+    private void ClearTags()
+    {
+        Tags.Clear();
+    }
+}
